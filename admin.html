@@ -418,7 +418,7 @@ $("filterResult").textContent=`Mostrando ${filtered.length} de ${players.filter(
  playerList.innerHTML=filtered.map(player=>{
   const whatsapp=String(player.whatsapp||"").replace(/\D/g,"");
   const whatsappNumber=whatsapp?(whatsapp.startsWith("55")?whatsapp:"55"+whatsapp):"";
-const message=`Olá, ${player.primeiro_nome||player.nick||"jogador"}! 🔥\n\nEstamos entrando em contato sobre sua inscrição na RLK. Gostaríamos de conversar com você e esclarecer algumas informações antes de finalizar a avaliação.\n\nRLK | HONRA. UNIÃO. GUERRA. ❤️`;
+const message=`Olá, ${player.primeiro_nome||player.nick||"jogador"}! \u{1F44B}\n\nEstamos entrando em contato sobre sua inscrição na RLK.\n\nGostaríamos de realizar um breve teste com você antes de confirmar sua entrada na guilda. Durante essa conversa, vamos conhecer melhor seu estilo de jogo, sua função e sua disponibilidade para as guerras.\n\nFique à vontade para responder por aqui. Em breve daremos continuidade à sua avaliação!\n\nRLK | HONRA. UNIÃO. GUERRA. \u{1F534}\u{26AB}`;
   const whatsappLink=whatsappNumber?`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`:"";
   const details=Object.entries(labels).map(([key,label])=>`<div class="detail-item"><small>${escapeHTML(label)}</small><div>${escapeHTML(formatValue(key,player[key]))}</div></div>`).join("");
   let actionButtons="";
