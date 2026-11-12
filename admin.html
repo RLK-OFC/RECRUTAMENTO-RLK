@@ -64,7 +64,7 @@ button:disabled{opacity:.5;cursor:not-allowed}.primary{background:var(--red);col
 .contact-status{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:9px;background:#0b0d12;font-size:12px;line-height:1.7}
 .contact-status.done{border-color:#176b45;color:#9ff0c5}.contact-status.pending{color:#ffdc84}
 .contact-button{background:#126b43;color:white}.contact-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
-.site-add-button{background:#a20b1c;color:white;border:1px solid #f0182d}.site-add-button:hover{background:#d50e25}
+.site-add-button{background:#a20b1c;color:white;border:1px solid #f0182d}.site-add-button:hover{background:#d50e25}.archive-button{background:#343844;color:#e4e6eb;border:1px solid #505563}.restore-button{background:#12452f;color:#9ff0c5;border:1px solid #1c8051}
 @media(max-width:650px){.stats{grid-template-columns:1fr 1fr}.details-grid{grid-template-columns:1fr}.container{margin:18px auto}.panel{padding:17px}.filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.filter-result{width:100%;margin-left:0}}
 @media(max-width:390px){.filter-grid{grid-template-columns:1fr}}
 </style>
@@ -123,7 +123,7 @@ button:disabled{opacity:.5;cursor:not-allowed}.primary{background:var(--red);col
   <section class="panel">
     <input id="searchInput" class="search" type="search" placeholder="Pesquisar por nome, nick, ID, cidade ou WhatsApp...">
     <div class="tabs">
-      <button class="tab active" data-tab="Pendente">Pendentes</button><button class="tab" data-tab="Aprovado">Aprovados</button><button class="tab" data-tab="Reprovado">Reprovados</button>
+<button class="tab active" data-tab="Pendente">Pendentes</button><button class="tab" data-tab="Aprovado">Aprovados</button><button class="tab" data-tab="Reprovado">Reprovados</button><button class="tab" data-tab="Arquivado">Arquivados</button>
     </div>
     <div class="filter-area">
       <div class="filter-heading">FILTROS INTELIGENTES</div>
@@ -244,7 +244,7 @@ function getFilteredPlayers(){
  const minLevel=$("minLevel").value===""?null:Number($("minLevel").value),maxLevel=$("maxLevel").value===""?null:Number($("maxLevel").value);
  const minAge=$("minAge").value===""?null:Number($("minAge").value),maxAge=$("maxAge").value===""?null:Number($("maxAge").value);
  const filtered=players.filter(player=>{
-  if(player.status!==currentTab)return false;
+if(currentTab==="Arquivado"?!player.arquivado:player.arquivado||player.status!==currentTab)return false;
   const searchable=[player.primeiro_nome,player.nick,player.jogador_id,player.cidade,player.whatsapp].join(" ").toLowerCase();
   if(search&&!searchable.includes(search))return false;
   if(evaluation&&evaluatePlayer(player).category!==evaluation)return false;
@@ -401,10 +401,10 @@ async function loadPlayers(){
  renderPlayers();
 }
 function updateCounts(){
- $("countPending").textContent=players.filter(p=>p.status==="Pendente").length;
- $("countApproved").textContent=players.filter(p=>p.status==="Aprovado").length;
- $("countRejected").textContent=players.filter(p=>p.status==="Reprovado").length;
- const evaluations=players.map(evaluatePlayer);
+$("countPending").textContent=players.filter(p=>!p.arquivado&&p.status==="Pendente").length;
+$("countApproved").textContent=players.filter(p=>!p.arquivado&&p.status==="Aprovado").length;
+$("countRejected").textContent=players.filter(p=>!p.arquivado&&p.status==="Reprovado").length;
+const evaluations=players.filter(p=>!p.arquivado).map(evaluatePlayer);
  $("countFit").textContent=evaluations.filter(e=>e.category==="fit").length;
  $("countReview").textContent=evaluations.filter(e=>e.category==="review").length;
  $("countFail").textContent=evaluations.filter(e=>e.category==="fail").length
@@ -413,18 +413,19 @@ function updateCounts(){
 /* EXIBIR CANDIDATOS */
 function renderPlayers(){
  const filtered=getFilteredPlayers();
- $("filterResult").textContent=`Mostrando ${filtered.length} de ${players.filter(p=>p.status===currentTab).length} inscrições`;
+$("filterResult").textContent=`Mostrando ${filtered.length} de ${players.filter(p=>currentTab==="Arquivado"?p.arquivado:!p.arquivado&&p.status===currentTab).length} inscrições`;
  if(!filtered.length){playerList.innerHTML='<div class="empty">Nenhuma inscrição encontrada com esses filtros.</div>';return}
  playerList.innerHTML=filtered.map(player=>{
   const whatsapp=String(player.whatsapp||"").replace(/\D/g,"");
   const whatsappNumber=whatsapp?(whatsapp.startsWith("55")?whatsapp:"55"+whatsapp):"";
-  const message=`Olá, ${player.primeiro_nome||player.nick||"jogador"}! 🔥\n\nTemos uma ótima notícia: sua inscrição na RLK foi APROVADA!\n\nSeja muito bem-vindo à nossa guilda! 🏆\n\nEm breve vamos passar as próximas orientações para você fazer parte da organização.\n\nRLK | HONRA. UNIÃO. GUERRA. ❤️`;
+const message=`Olá, ${player.primeiro_nome||player.nick||"jogador"}! 🔥\n\nEstamos entrando em contato sobre sua inscrição na RLK. Gostaríamos de conversar com você e esclarecer algumas informações antes de finalizar a avaliação.\n\nRLK | HONRA. UNIÃO. GUERRA. ❤️`;
   const whatsappLink=whatsappNumber?`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`:"";
   const details=Object.entries(labels).map(([key,label])=>`<div class="detail-item"><small>${escapeHTML(label)}</small><div>${escapeHTML(formatValue(key,player[key]))}</div></div>`).join("");
   let actionButtons="";
-  if(player.status==="Pendente")actionButtons=`<button class="success" data-action="Aprovado" data-id="${escapeHTML(player.id)}">Aprovar</button><button class="danger" data-action="Reprovado" data-id="${escapeHTML(player.id)}">Reprovar</button>`;
-  else actionButtons=`<button class="warning" data-action="Pendente" data-id="${escapeHTML(player.id)}">Voltar para pendentes</button>${player.status==="Aprovado"?(siteMemberIds.has(String(player.jogador_id||"").trim())?'<button class="site-add-button" disabled>JÁ ESTÁ NO SITE</button>':`<button class="site-add-button" data-add-site="${escapeHTML(player.id)}">ADICIONAR AO SITE</button>`):""}`;
-  const contactBlock=player.status==="Aprovado"&&whatsapp?`
+   if(!player.arquivado&&player.status==="Pendente")actionButtons=`<button class="success" data-action="Aprovado" data-id="${escapeHTML(player.id)}">Aprovar</button><button class="danger" data-action="Reprovado" data-id="${escapeHTML(player.id)}">Reprovar</button>`;
+   else if(!player.arquivado)actionButtons=`<button class="warning" data-action="Pendente" data-id="${escapeHTML(player.id)}">Voltar para pendentes</button>${player.status==="Aprovado"?(siteMemberIds.has(String(player.jogador_id||"").trim())?'<button class="site-add-button" disabled>JÁ ESTÁ NO SITE</button>':`<button class="site-add-button" data-add-site="${escapeHTML(player.id)}">ADICIONAR AO SITE</button>`):""}`;
+   actionButtons+=player.arquivado?`<button class="restore-button" data-restore="${escapeHTML(player.id)}">RESTAURAR À ABA ${escapeHTML(player.status.toUpperCase())}</button>`:`<button class="archive-button" data-archive="${escapeHTML(player.id)}">ARQUIVAR</button>`;
+const contactBlock=whatsapp?`
    <div class="contact-status ${player.contatado_em?"done":"pending"}">
     ${player.contatado_em?`<strong>✓ CANDIDATO JÁ CONTATADO</strong><br>Administrador: ${escapeHTML(player.contatado_por_email||"Não identificado")}<br>Data: ${escapeHTML(formatValue("contatado_em",player.contatado_em))}`:`<strong>⚠ AGUARDANDO CONTATO</strong><br>Nenhum administrador registrou o envio da mensagem.`}
    </div>
@@ -468,9 +469,28 @@ async function loadHistory(id){
  }).join("")
 }
 
+async function setArchived(id,archived,button){
+ const player=players.find(p=>String(p.id)===String(id));
+ if(!player){alert("Candidato não encontrado.");return}
+ const question=archived?"Deseja arquivar esta inscrição? Ela continuará salva e poderá ser restaurada na aba Arquivados.":`Deseja restaurar esta inscrição para a aba ${player.status}?`;
+ if(!confirm(question))return;
+ button.disabled=true;
+ const {data:userData,error:userError}=await client.auth.getUser();
+ if(userError||!userData.user){alert("Não foi possível identificar o administrador.");button.disabled=false;return}
+ const {data,error}=await client.from("inscricoes_rlk").update({arquivado:archived}).eq("id",id).select("id,arquivado").maybeSingle();
+ if(error||!data){alert("Não foi possível atualizar o arquivamento. Verifique se a coluna arquivado foi criada no Supabase e se as permissões permitem a alteração.\n\n"+(error?.message||"Nenhum registro atualizado."));button.disabled=false;return}
+ const {error:historyError}=await client.from("historico_rlk").insert({inscricao_id:id,administrador:userData.user.id,acao:archived?"Inscrição arquivada":"Inscrição restaurada",status_anterior:player.status,status_novo:player.status,observacao:archived?"Inscrição movida para a aba Arquivados.":`Inscrição restaurada para a aba ${player.status}.`});
+ if(historyError)alert("A inscrição foi atualizada, mas não foi possível registrar essa ação no histórico: "+historyError.message);
+ await loadPlayers();
+}
+
 /* AÇÕES */
 playerList.addEventListener("click",async event=>{
- const addSiteButton=event.target.closest("[data-add-site]");
+const archiveButton=event.target.closest("[data-archive]");
+  if(archiveButton){await setArchived(archiveButton.dataset.archive,true,archiveButton);return}
+  const restoreButton=event.target.closest("[data-restore]");
+  if(restoreButton){await setArchived(restoreButton.dataset.restore,false,restoreButton);return}
+  const addSiteButton=event.target.closest("[data-add-site]");
  if(addSiteButton){
   await adicionarCandidatoAoSite(addSiteButton.dataset.addSite,addSiteButton);
   return;
@@ -479,7 +499,7 @@ playerList.addEventListener("click",async event=>{
  if(contactButton){
   const id=contactButton.dataset.contact,player=players.find(p=>String(p.id)===String(id));
   if(!player){alert("Candidato não encontrado.");return}
-  if(player.status!=="Aprovado"){alert("Somente candidatos aprovados podem ser marcados como contatados.");return}
+
   if(player.contatado_em){alert("Este candidato já foi contatado por outro administrador.");await loadPlayers();return}
   if(!confirm("Você já enviou a mensagem pelo WhatsApp?\n\nAo confirmar, os outros administradores verão que o candidato foi contatado."))return;
   contactButton.disabled=true;contactButton.textContent="REGISTRANDO...";
