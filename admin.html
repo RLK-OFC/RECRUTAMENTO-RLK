@@ -64,6 +64,7 @@ button:disabled{opacity:.5;cursor:not-allowed}.primary{background:var(--red);col
 .contact-status{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:9px;background:#0b0d12;font-size:12px;line-height:1.7}
 .contact-status.done{border-color:#176b45;color:#9ff0c5}.contact-status.pending{color:#ffdc84}
 .contact-button{background:#126b43;color:white}.contact-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.site-add-button{background:#a20b1c;color:white;border:1px solid #f0182d}.site-add-button:hover{background:#d50e25}
 @media(max-width:650px){.stats{grid-template-columns:1fr 1fr}.details-grid{grid-template-columns:1fr}.container{margin:18px auto}.panel{padding:17px}.filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.filter-result{width:100%;margin-left:0}}
 @media(max-width:390px){.filter-grid{grid-template-columns:1fr}}
 </style>
@@ -145,6 +146,12 @@ button:disabled{opacity:.5;cursor:not-allowed}.primary{background:var(--red);col
 const SUPABASE_URL="https://pcabchaqmqllfvvvudbl.supabase.co";
 const SUPABASE_KEY="sb_publishable_THm0a3RUx5Y3oxX303HRbg_JZc7K4aS";
 const client=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+const SITE_ADMINS=[
+ "a4a806a9-ac92-4ea2-8926-be9d3165e3e7",
+ "8a5349b9-2fb4-43c1-b2c3-ed64557584de",
+ "5197a1e0-4f73-4649-a314-e3f33764eec1"
+];
+let siteMemberIds=new Set();
   fetch(SUPABASE_URL+"/auth/v1/health",{
   headers:{"apikey":SUPABASE_KEY}
 })
@@ -312,6 +319,57 @@ $("resetForm").addEventListener("submit",async event=>{
 });
 
 /* CARREGAR INSCRIÇÕES */
+async function loadSiteMemberIds(){
+ const approvedIds=[...new Set(players.filter(p=>p.status==="Aprovado"&&p.jogador_id).map(p=>String(p.jogador_id).trim()).filter(Boolean))];
+ siteMemberIds=new Set();
+ if(!approvedIds.length)return;
+ const {data,error}=await client.from("membros_rlk").select("id_jogo").in("id_jogo",approvedIds);
+ if(error){console.warn("Não foi possível verificar os membros já cadastrados no site:",error.message);return}
+ (data||[]).forEach(item=>{if(item.id_jogo)siteMemberIds.add(String(item.id_jogo).trim())});
+}
+
+async function adicionarCandidatoAoSite(playerId,button){
+ const player=players.find(p=>String(p.id)===String(playerId));
+ if(!player){alert("Candidato não encontrado.");return}
+ if(player.status!=="Aprovado"){alert("Somente candidatos aprovados podem ser adicionados ao site.");return}
+ const gameId=String(player.jogador_id||"").trim();
+ if(!gameId){alert("Esta inscrição não possui ID do Free Fire. Complete o ID antes de adicionar ao site.");return}
+ const {data:userData,error:userError}=await client.auth.getUser();
+ if(userError||!userData.user||!SITE_ADMINS.includes(userData.user.id)){
+  alert("Esta conta não está autorizada a adicionar membros ao site oficial.");
+  return;
+ }
+ if(!confirm("Adicionar "+(player.nick||player.primeiro_nome||"este jogador")+" ao site oficial da RLK?\n\nID: "+gameId+"\nPatente: "+(player.patente||"Não informada")+"\nFunção: "+(player.funcao||"Não informada")))return;
+ button.disabled=true;button.textContent="VERIFICANDO...";
+ const {data:existing,error:lookupError}=await client.from("membros_rlk").select("id,id_jogo").eq("id_jogo",gameId).limit(1);
+ if(lookupError){alert("Não foi possível verificar se o jogador já está no site: "+lookupError.message);button.disabled=false;button.textContent="ADICIONAR AO SITE";return}
+ if(existing&&existing.length){
+  siteMemberIds.add(gameId);
+  alert("Este ID já está cadastrado no site oficial. Não foi criado um duplicado.");
+  await loadPlayers();
+  return;
+ }
+ button.textContent="ADICIONANDO...";
+ const payload={
+  nome:String(player.primeiro_nome||player.nick||"").trim(),
+  nick:String(player.nick||"").trim(),
+  id_jogo:gameId,
+  patente:String(player.patente||"").trim(),
+  funcao:String(player.funcao||"").trim(),
+  descricao:"",
+  ativo:true
+ };
+ const {error}=await client.from("membros_rlk").insert(payload);
+ if(error){
+  alert("Não foi possível adicionar o membro ao site: "+error.message);
+  button.disabled=false;button.textContent="ADICIONAR AO SITE";
+  return;
+ }
+ siteMemberIds.add(gameId);
+ alert("Jogador adicionado ao site oficial da RLK!");
+ await loadPlayers();
+}
+
 async function loadPlayers(){
  playerList.innerHTML='<div class="loading">Carregando inscrições...</div>';
  clearMessage($("loadMessage"));
@@ -337,6 +395,7 @@ async function loadPlayers(){
 
  console.log("Inscrições carregadas:",data);
  players=data||[];
+ await loadSiteMemberIds();
  updateCounts();
  populateRankFilter();
  renderPlayers();
@@ -364,7 +423,7 @@ function renderPlayers(){
   const details=Object.entries(labels).map(([key,label])=>`<div class="detail-item"><small>${escapeHTML(label)}</small><div>${escapeHTML(formatValue(key,player[key]))}</div></div>`).join("");
   let actionButtons="";
   if(player.status==="Pendente")actionButtons=`<button class="success" data-action="Aprovado" data-id="${escapeHTML(player.id)}">Aprovar</button><button class="danger" data-action="Reprovado" data-id="${escapeHTML(player.id)}">Reprovar</button>`;
-  else actionButtons=`<button class="warning" data-action="Pendente" data-id="${escapeHTML(player.id)}">Voltar para pendentes</button>`;
+  else actionButtons=`<button class="warning" data-action="Pendente" data-id="${escapeHTML(player.id)}">Voltar para pendentes</button>${player.status==="Aprovado"?(siteMemberIds.has(String(player.jogador_id||"").trim())?'<button class="site-add-button" disabled>JÁ ESTÁ NO SITE</button>':`<button class="site-add-button" data-add-site="${escapeHTML(player.id)}">ADICIONAR AO SITE</button>`):""}`;
   const contactBlock=player.status==="Aprovado"&&whatsapp?`
    <div class="contact-status ${player.contatado_em?"done":"pending"}">
     ${player.contatado_em?`<strong>✓ CANDIDATO JÁ CONTATADO</strong><br>Administrador: ${escapeHTML(player.contatado_por_email||"Não identificado")}<br>Data: ${escapeHTML(formatValue("contatado_em",player.contatado_em))}`:`<strong>⚠ AGUARDANDO CONTATO</strong><br>Nenhum administrador registrou o envio da mensagem.`}
@@ -411,6 +470,11 @@ async function loadHistory(id){
 
 /* AÇÕES */
 playerList.addEventListener("click",async event=>{
+ const addSiteButton=event.target.closest("[data-add-site]");
+ if(addSiteButton){
+  await adicionarCandidatoAoSite(addSiteButton.dataset.addSite,addSiteButton);
+  return;
+ }
  const contactButton=event.target.closest("[data-contact]");
  if(contactButton){
   const id=contactButton.dataset.contact,player=players.find(p=>String(p.id)===String(id));
