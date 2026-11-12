@@ -136,7 +136,7 @@ button:disabled{opacity:.5;cursor:not-allowed}.primary{background:var(--red);col
         <div class="filter-field"><label for="minAge">Idade mínima</label><input id="minAge" type="number" min="1" placeholder="Sem limite"></div>
         <div class="filter-field"><label for="maxAge">Idade máxima</label><input id="maxAge" type="number" min="1" placeholder="Sem limite"></div>
       </div>
-      <div class="filter-actions"><button id="clearFilters" class="secondary" type="button">Limpar filtros</button><span id="filterResult" class="filter-result">Mostrando inscrições</span></div>
+      <div class="filter-actions"><button id="clearFilters" class="secondary" type="button">Limpar filtros</button><button id="archiveFiltered" class="archive-button" type="button">ARQUIVAR RESULTADOS DO FILTRO</button><span id="filterResult" class="filter-result">Mostrando inscrições</span></div>
     </div>
     <div id="playerList" class="player-list"><div class="loading">Carregando inscrições...</div></div><div id="loadMessage" class="message"></div>
   </section>
@@ -452,7 +452,7 @@ document.querySelectorAll(".tab").forEach(button=>button.addEventListener("click
  currentTab=button.dataset.tab;document.querySelectorAll(".tab").forEach(tab=>tab.classList.toggle("active",tab===button));renderPlayers()
 }));
 ["evaluationFilter","rankFilter","sortFilter","minLevel","maxLevel","minAge","maxAge"].forEach(id=>{$(id).addEventListener("input",renderPlayers);$(id).addEventListener("change",renderPlayers)});
-searchInput.addEventListener("input",renderPlayers);$("clearFilters").addEventListener("click",clearFilters);
+searchInput.addEventListener("input",renderPlayers);$("clearFilters").addEventListener("click",clearFilters);$("archiveFiltered").addEventListener("click",archiveFilteredPlayers);
 
 /* HISTÓRICO */
 async function loadHistory(id){
@@ -469,6 +469,23 @@ async function loadHistory(id){
  }).join("")
 }
 
+async function archiveFilteredPlayers(){
+ const matching=getFilteredPlayers().filter(player=>!player.arquivado);
+ if(currentTab==="Arquivado"){alert("Selecione uma aba de inscrições antes de arquivar.");return}
+ if(!matching.length){alert("Nenhuma inscrição corresponde aos filtros atuais.");return}
+ const description=searchInput.value.trim()?"\nBusca: "+searchInput.value.trim():"";
+ if(!confirm("Arquivar "+matching.length+" inscrição(ões) que correspondem aos filtros atuais?"+description+"\n\nSomente os resultados filtrados desta aba serão arquivados. Os cadastros continuarão salvos e poderão ser restaurados."))return;
+ const button=$("archiveFiltered");button.disabled=true;button.textContent="ARQUIVANDO...";
+ const {data:userData,error:userError}=await client.auth.getUser();
+ if(userError||!userData.user){alert("Não foi possível identificar o administrador.");button.disabled=false;button.textContent="ARQUIVAR RESULTADOS DO FILTRO";return}
+ const ids=matching.map(player=>player.id);
+ const {data:updated,error}=await client.from("inscricoes_rlk").update({arquivado:true}).in("id",ids).eq("arquivado",false).select("id");
+ if(error||!updated||!updated.length){alert("Não foi possível arquivar os resultados. Verifique a coluna arquivado e as permissões no Supabase.\n\n"+(error?.message||"Nenhuma inscrição foi atualizada."));button.disabled=false;button.textContent="ARQUIVAR RESULTADOS DO FILTRO";return}
+ const historyRows=updated.map(item=>{const player=matching.find(candidate=>String(candidate.id)===String(item.id));return {inscricao_id:item.id,administrador:userData.user.id,acao:"Inscrição arquivada em lote",status_anterior:player?.status||currentTab,status_novo:player?.status||currentTab,observacao:"Arquivada em lote pelos filtros aplicados na aba "+currentTab+"."}});
+ const {error:historyError}=await client.from("historico_rlk").insert(historyRows);
+ if(historyError)alert(updated.length+" inscrição(ões) arquivada(s), mas houve erro ao registrar o histórico: "+historyError.message);else alert(updated.length+" inscrição(ões) arquivada(s) com sucesso!");
+ button.disabled=false;button.textContent="ARQUIVAR RESULTADOS DO FILTRO";await loadPlayers();
+}
 async function setArchived(id,archived,button){
  const player=players.find(p=>String(p.id)===String(id));
  if(!player){alert("Candidato não encontrado.");return}
